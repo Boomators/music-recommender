@@ -58,6 +58,7 @@ GENRE_WEIGHT = 2.0
 MOOD_WEIGHT = 1.0
 ENERGY_WEIGHT = 1.5
 ACOUSTIC_WEIGHT = 0.5
+MAX_SCORE = GENRE_WEIGHT + MOOD_WEIGHT + ENERGY_WEIGHT + ACOUSTIC_WEIGHT
 
 INT_FIELDS = {"id"}
 FLOAT_FIELDS = {"energy", "tempo_bpm", "valence", "danceability", "acousticness"}
