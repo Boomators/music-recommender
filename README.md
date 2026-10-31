@@ -149,6 +149,7 @@ Output of `python -m src.main` for the default pop/happy profile:
 
 ```
 Loaded songs: 18
+Mode: genre-first
 
 ============================================================
 Profile: High-Energy Pop
@@ -411,6 +412,103 @@ I changed `ENERGY_WEIGHT` from 1.5 to 3.0 and `GENRE_WEIGHT` from 2.0 to 1.0. Th
 | Off the Scale | Iron Tempest, Neon Euphoria, Gym Hero | *(same)* | No change |
 
 **Takeaway:** Cutting genre fixed the "indie pop isn't pop" problem for one profile, but it broke the conflicting profile. There, energy alone now decides, and the only sad folk song falls to fifth. The shift mostly made results *different*, not better. The real fix is fuzzier genre matching, not a different weight. I kept the original weights.
+
+---
+
+## Stretch Features
+
+All four optional challenges were built on the `experiment/stretch-features` branch and merged back into `main` once the tests passed. With no flags, `python -m src.main` still prints exactly the same results as before for the original six profiles.
+
+```bash
+python -m src.main --mode mood-first          # switch ranking strategy
+python -m src.main --diverse                  # apply the diversity penalty
+python -m src.main --format table             # ASCII summary table
+python -m src.main --profile "Clean Workout"  # run one profile
+```
+
+### 1. Advanced song features
+
+Five new columns in `data/songs.csv`, each scored only if the profile asks for it:
+
+| Column | Values | Profile field | Points (genre-first) |
+|---|---|---|---|
+| `popularity` | 0–100 | `likes_popular` (True = hits, False = hidden gems) | up to +0.3 |
+| `release_decade` | 1970–2020 | `preferred_decade` | +0.5 same decade, +0.25 neighboring |
+| `mood_tags` | 3 detailed tags, e.g. `nostalgic\|nocturnal\|brooding` | `favorite_tags` | up to +1.0, split across the user's tags |
+| `instrumentalness` | 0–1 | `wants_instrumental` | up to +0.5 |
+| `explicit` | 0/1 | `allow_explicit` | **hard filter:** explicit songs are removed |
+
+The detailed tags partly fix the exact-match problem from the model card. "sad" and "melancholic" now overlap through shared tags, even though the `mood` labels differ.
+
+### 2. Scoring modes (Strategy pattern)
+
+Each strategy is a `ScoringMode` object: a named set of weights. `score_song` takes the mode as an argument, so adding a strategy means adding one line, not a new function.
+
+| Mode | Genre | Mood | Energy | Tags | Effect |
+|---|---|---|---|---|---|
+| `genre-first` (default) | 2.0 | 1.0 | 1.5 | 1.0 | The original recipe |
+| `mood-first` | 1.0 | 2.0 | 1.5 | 1.5 | *Rooftop Lights* passes *Gym Hero* for the pop fan. *Dusty Porch Light* becomes the Night Owl's #1 |
+| `energy-focused` | 1.0 | 0.5 | 3.0 | 0.5 | Sad but Hyped loses *Paper Boats* entirely and gets five loud songs |
+
+### 3. Diversity penalty
+
+With `--diverse`, the top k is picked one song at a time. Each candidate loses **1.0** if its artist is already in the list, and **0.5 for each song of its genre** already listed. The penalty appears in the reasons, for example "artist already listed (-1.00)".
+
+| Profile | Without | With `--diverse` |
+|---|---|---|
+| High-Energy Pop | #5 *Night Drive Loop* (Neon Echo, 2nd song by the artist) | #5 *Storm Runner* |
+| Chill Lofi | #3 *Focus Flow* (LoRoom again, 3rd lofi) | *Focus Flow* drops to #5. *Spacewalk Thoughts* and *Coffee Shop Stories* move up |
+| Ghost Genre | #4 *Night Drive Loop* (Neon Echo again) | Replaced by *Storm Runner* |
+
+### 4. Summary table
+
+`--format table` prints an ASCII table with wrapped cells, one reason per line. It needs no extra libraries.
+
+```
+Nostalgic Night Owl
++----+------------------------+--------------------+-------------+------------------------------------------------+
+| #  | Song                   | Genre / Mood       | Score       | Why                                            |
++====+========================+====================+=============+================================================+
+| 1  | Night Drive Loop       | synthwave          | 5.06 / 7.30 | - genre match: synthwave (+2.00)               |
+|    | by Neon Echo           | moody              |             | - energy 0.75 vs target 0.55 (+1.20)           |
+|    |                        |                    |             | - electronic texture (+0.39)                   |
+|    |                        |                    |             | - shared tags: nostalgic, nocturnal (+0.67)    |
+|    |                        |                    |             | - from the 1980s (+0.25)                       |
+|    |                        |                    |             | - hidden gem, popularity 58 (+0.13)            |
+|    |                        |                    |             | - instrumental (+0.42)                         |
++----+------------------------+--------------------+-------------+------------------------------------------------+
+| 2  | Dusty Porch Light      | country            | 3.92 / 7.30 | - mood match: nostalgic (+1.00)                |
+|    | by The Hollow Pines    | nostalgic          |             | - energy 0.52 vs target 0.55 (+1.46)           |
+|    |                        |                    |             | - electronic texture (+0.13)                   |
+|    |                        |                    |             | - shared tags: nostalgic, reflective (+0.67)   |
+|    |                        |                    |             | - from the 1990s (+0.50)                       |
+|    |                        |                    |             | - hidden gem, popularity 50 (+0.15)            |
+|    |                        |                    |             | - instrumental (+0.02)                         |
++----+------------------------+--------------------+-------------+------------------------------------------------+
+| 3  | Midnight Coding        | lofi               | 2.36 / 7.30 | - energy 0.42 vs target 0.55 (+1.30)           |
+|    | by LoRoom              | chill              |             | - electronic texture (+0.15)                   |
+|    |                        |                    |             | - shared tags: nocturnal (+0.33)               |
+|    |                        |                    |             | - hidden gem, popularity 61 (+0.12)            |
+|    |                        |                    |             | - instrumental (+0.46)                         |
++----+------------------------+--------------------+-------------+------------------------------------------------+
+| 4  | Rainfall Sonata        | classical          | 2.29 / 7.30 | - energy 0.22 vs target 0.55 (+1.00)           |
+|    | by Clara Vey           | melancholic        |             | - electronic texture (+0.02)                   |
+|    |                        |                    |             | - shared tags: reflective (+0.33)              |
+|    |                        |                    |             | - from the 2000s (+0.25)                       |
+|    |                        |                    |             | - hidden gem, popularity 34 (+0.20)            |
+|    |                        |                    |             | - instrumental (+0.49)                         |
++----+------------------------+--------------------+-------------+------------------------------------------------+
+| 5  | Coffee Shop Stories    | jazz               | 2.24 / 7.30 | - energy 0.37 vs target 0.55 (+1.23)           |
+|    | by Slow Stereo         | relaxed            |             | - electronic texture (+0.05)                   |
+|    |                        |                    |             | - from the 1990s (+0.50)                       |
+|    |                        |                    |             | - hidden gem, popularity 47 (+0.16)            |
+|    |                        |                    |             | - instrumental (+0.30)                         |
++----+------------------------+--------------------+-------------+------------------------------------------------+
+```
+
+### What testing caught
+
+The first version of `explicit` was a −1.0 penalty. Testing the **Clean Workout** profile showed *Gym Hero*, which is explicit, **still ranked #1** (4.93 vs. 3.79), because it matched on everything else. A listener who turns explicit content off expects those songs gone, not demoted, so I changed it to a filter. There's a test for it now.
 
 ---
 

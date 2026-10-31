@@ -51,6 +51,7 @@ A perfect song scores 5 out of 5. After every song has a score, the judge lines 
 - **Size:** 18 songs in `data/songs.csv`. The starter file had 10. I added 8, each with a genre and mood that wasn't there before.
 - **Features per song:** genre, mood, energy (0–1), tempo (BPM), valence (0–1, how bright the song sounds), danceability (0–1), and acousticness (0–1).
 - **Used in scoring:** genre, mood, energy and acousticness. Tempo, valence and danceability are loaded but ignored.
+- **Stretch additions:** popularity (0–100), release decade, detailed mood tags, instrumentalness, and an explicit flag. These only count when a profile asks for them. See *Stretch Features* in the README.
 - **Coverage:** 15 genres and 14 moods. Lofi has 3 songs and pop has 2. Every other genre has exactly 1.
 - **What's missing:**
   - lyrics, language and vocals
@@ -131,6 +132,8 @@ Mostly yes. *Sunrise City* is first because it matches on everything: the right 
 1. **Fuzzy genre and mood matching.** Give partial credit to related labels: "indie pop" for pop fans, "metal" for rock fans, "melancholic" for sad listeners. This would fix the biggest weakness I found.
 2. **Validate input and say when something isn't found.** Keep the energy target between 0 and 1, and tell the user "no k-pop in the catalog, showing happy songs instead."
 3. **Add valence and a variety rule.** Valence would separate bright songs from dark ones at the same energy. A variety rule (for example, at most one song per artist or genre in the top 5) would stop the same loud electronic tracks from filling every high-energy list.
+
+*Update:* the variety rule (`--diverse`), detailed mood tags and switchable scoring modes are now built as stretch features. Fuzzy genre matching and valence are still to do.
 
 ---
 
